@@ -661,12 +661,12 @@ class StructuredMesh(MeshBase):
         return self.n_elements
 
     def plot(self,
-                datasets: dict | None = None,
-                scalar: str | None = None,
-                volume_normalization: bool = True,
-                threshold: float | None = None,
-                cmap: str = 'turbo'
-                **kwargs):
+            datasets: dict | None = None,
+            scalar: str | None = None,
+            volume_normalization: bool = True,
+            threshold: float | None = None,
+            cmap: str = 'turbo',
+            **kwargs):
             """Visualize the mesh using PyVista.
 
             Parameters
