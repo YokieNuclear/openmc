@@ -696,7 +696,7 @@ class StructuredMesh(MeshBase):
             import vtk
 
             # Build the VTK grid
-            if not curvilinear or isinstance(self, (RegularMesh, RectilinearMesh)):
+            if isinstance(self, (RegularMesh, RectilinearMesh)):
                 vtk_grid = self._create_vtk_structured_grid()
             else:
                 vtk_grid = self._create_vtk_unstructured_grid()
