@@ -9,6 +9,8 @@ from .source import SourceParticle
 
 from pathlib import Path
 
+import numpy as np
+
 ParticleTrack = namedtuple('ParticleTrack', ['particle', 'states'])
 ParticleTrack.__doc__ = """\
 Particle track information
@@ -148,23 +150,35 @@ class Track(Sequence):
         track.particle_tracks = matching
         return track
 
-    def plot(self, axes=None):
-        """Produce a 3D plot of particle tracks
+    def plot(self, axes=None, backend='pyvista', **kwargs):
+            """Produce a 3D plot of particle tracks
 
-        Parameters
-        ----------
-        axes : matplotlib.axes.Axes, optional
-            Axes for plot
+            Parameters
+            ----------
+            axes : matplotlib.axes.Axes, optional
+                Axes for plot. Only used when backend is 'matplotlib'.
+            backend : {'pyvista', 'matplotlib'}, optional
+                Plotting backend to use. Defaults to 'pyvista'.
+            **kwargs
+                Additional keyword arguments passed to the plotting backend.
 
-        Returns
-        -------
-        axes : matplotlib.axes.Axes
-            Axes for plot
+            Returns
+            -------
+            matplotlib.axes.Axes or pyvista.Plotter
+                Axes or plotter object for the plot.
+            """
+            if backend == 'matplotlib':
+                return self._plot_matplotlib(axes, **kwargs)
+            elif backend == 'pyvista':
+                return self._plot_pyvista(**kwargs)
+            else:
+                raise ValueError(f"Unknown backend '{backend}'. "
+                                "Choose 'pyvista' or 'matplotlib'.")
 
-        """
+    def _plot_matplotlib(self, axes=None, **kwargs):
+        """Plot tracks using matplotlib"""
         import matplotlib.pyplot as plt
 
-        # Setup axes is one wasn't passed
         if axes is None:
             fig = plt.figure()
             ax = plt.axes(projection='3d')
@@ -174,12 +188,49 @@ class Track(Sequence):
         else:
             ax = axes
 
-        # Plot each particle track
         for _, states in self:
             r = states['r']
             ax.plot3D(r['x'], r['y'], r['z'])
 
         return ax
+
+    def _plot_pyvista(self, plotter=None, **kwargs):
+        """Plot tracks using PyVista"""
+        import pyvista as pv
+        import vtk
+
+        _PARTICLE_COLORS = {
+            'neutron':  'blue',
+            'photon':   'yellow',
+            'electron': 'red',
+            'positron': 'green',
+            'proton':   'orange',
+            'deuteron': 'purple',
+            'triton':   'cyan',
+            'alpha':    'magenta',
+        }
+
+        owns_plotter = plotter is None
+        if owns_plotter:
+            plotter = pv.Plotter()
+
+        for particle_track in self:
+            r = particle_track.states['r']
+            points = np.column_stack([r['x'], r['y'], r['z']])
+
+            # build a polyline
+            n = len(points)
+            lines = np.hstack([[n], np.arange(n)])
+            poly = pv.PolyData()
+            poly.points = points
+            poly.lines = lines
+
+            color = _PARTICLE_COLORS.get(str(particle_track.particle), 'white')
+            plotter.add_mesh(poly, color=color, **kwargs)
+
+        if owns_plotter:
+            return plotter.show()
+        return plotter
 
     @property
     def sources(self):
@@ -252,24 +303,40 @@ class Tracks(list):
                 matching.append(track)
         return matching
 
-    def plot(self):
-        """Produce a 3D plot of particle tracks
+    def plot(self, backend='pyvista', **kwargs):
+            """Produce a 3D plot of particle tracks
 
-        Returns
-        -------
-        matplotlib.axes.Axes
-            Axes for plot
+            Parameters
+            ----------
+            backend : {'pyvista', 'matplotlib'}, optional
+                Plotting backend to use. Defaults to 'pyvista'.
+            **kwargs
+                Additional keyword arguments passed to the plotting backend.
 
-        """
-        import matplotlib.pyplot as plt
-        fig = plt.figure()
-        ax = plt.axes(projection='3d')
-        ax.set_xlabel('x [cm]')
-        ax.set_ylabel('y [cm]')
-        ax.set_zlabel('z [cm]')
-        for track in self:
-            track.plot(ax)
-        return ax
+            Returns
+            -------
+            matplotlib.axes.Axes or pyvista.Plotter
+                Axes or plotter object for the plot.
+            """
+            if backend == 'matplotlib':
+                import matplotlib.pyplot as plt
+                fig = plt.figure()
+                ax = plt.axes(projection='3d')
+                ax.set_xlabel('x [cm]')
+                ax.set_ylabel('y [cm]')
+                ax.set_zlabel('z [cm]')
+                for track in self:
+                    track.plot(axes=ax, backend='matplotlib')
+                return ax
+            elif backend == 'pyvista':
+                import pyvista as pv
+                plotter = pv.Plotter()
+                for track in self:
+                    track._plot_pyvista(plotter=plotter, **kwargs)
+                return plotter.show()
+            else:
+                raise ValueError(f"Unknown backend '{backend}'. "
+                                "Choose 'pyvista' or 'matplotlib'.")
 
     def write_to_vtk(self, filename=Path('tracks.vtp')):
         """Creates a VTP file of the tracks
