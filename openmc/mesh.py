@@ -664,7 +664,8 @@ class StructuredMesh(MeshBase):
                 datasets: dict | None = None,
                 scalar: str | None = None,
                 volume_normalization: bool = True,
-                curvilinear: bool = False,
+                threshold: float | None = None,
+                cmap: str = 'turbo'
                 **kwargs):
             """Visualize the mesh using PyVista.
 
@@ -679,9 +680,11 @@ class StructuredMesh(MeshBase):
             volume_normalization : bool, optional
                 Whether or not to normalize the data by the volume of the mesh
                 elements. Default is True.
-            curvilinear : bool, optional
-                Whether to use curvilinear elements. Only applies to
-                ``SphericalMesh`` and ``CylindricalMesh``. Default is False.
+            threshold : float, optional
+                If provided, cells with scalar values below this threshold
+                will be hidden. Useful for visualizing sparse data.
+            cmap : str, optional
+                Colormap to use. Defaults to 'turbo'.
             **kwargs
                 Additional keyword arguments passed to PyVista's ``add_mesh``
                 method.
@@ -707,7 +710,7 @@ class StructuredMesh(MeshBase):
                     dataset = self._reshape_vtk_dataset(dataset)
                     self._check_vtk_dataset(label, dataset)
                     if dataset.ndim == 3:
-                        dataset = dataset.T.ravel()
+                        dataset = dataset.ravel()
                     if volume_normalization:
                         dataset = dataset / self.volumes.T.ravel()
                     dataset_array = vtk.vtkDoubleArray()
@@ -722,9 +725,18 @@ class StructuredMesh(MeshBase):
             if scalar is None and datasets:
                 scalar = next(iter(datasets))
 
+            # Set active scalars explicitly so PyVista renders them correctly
+            if scalar is not None:
+                mesh.set_active_scalars(scalar)
+
+            # Apply threshold if requested
+            if threshold is not None:
+                mesh = mesh.threshold(threshold)
+
             # Plot
             plotter = pv.Plotter()
-            plotter.add_mesh(mesh, scalars=scalar, **kwargs)
+            plotter.add_mesh(mesh, scalars=scalar, cmap=cmap, **kwargs)
+
             return plotter.show()
         
     def write_data_to_vtk(self,
