@@ -3025,6 +3025,89 @@ class UnstructuredMesh(MeshBase):
         )
         self.write_data_to_vtk(**kwargs)
 
+    def plot(self,
+             datasets: dict | None = None,
+             scalar: str | None = None,
+             volume_normalization: bool = True,
+             **kwargs):
+        """Visualize the unstructured mesh using PyVista.
+
+        Parameters
+        ----------
+        datasets : dict, optional
+            Dictionary whose keys are data labels and values are numpy
+            arrays of the data, in the same format as
+            :meth:`write_data_to_vtk`.
+        scalar : str, optional
+            Name of the dataset to display. If not provided, the first
+            dataset is used.
+        volume_normalization : bool, optional
+            Whether or not to normalize the data by the volume of the mesh
+            elements. Default is True.
+        **kwargs
+            Additional keyword arguments passed to PyVista's ``add_mesh``
+            method.
+
+        Returns
+        -------
+        pyvista.plotting.renderers.Renderer
+            The trame viewer object returned by plotter.show().
+        """
+        import pyvista as pv
+        from vtkmodules.util import numpy_support
+        from vtkmodules import vtkCommonCore, vtkCommonDataModel
+
+        if self.connectivity is None or self.vertices is None:
+            raise RuntimeError("This mesh has not been loaded from a statepoint file.")
+
+        # Build the VTK unstructured grid
+        grid = vtkCommonDataModel.vtkUnstructuredGrid()
+        points = vtkCommonCore.vtkPoints()
+        points.SetData(numpy_support.numpy_to_vtk(self.vertices))
+        grid.SetPoints(points)
+
+        for elem_type, conn in zip(self.element_types, self.connectivity):
+            if elem_type == self._LINEAR_TET:
+                elem = vtkCommonDataModel.vtkTetra()
+            elif elem_type == self._LINEAR_HEX:
+                elem = vtkCommonDataModel.vtkHexahedron()
+            elif elem_type == self._UNSUPPORTED_ELEM:
+                continue
+            else:
+                raise RuntimeError(
+                    f"Invalid element type {elem_type} found in mesh {self.id}"
+                )
+            for i, c in enumerate(conn):
+                if c == -1:
+                    break
+                elem.GetPointIds().SetId(i, c)
+            grid.InsertNextCell(elem.GetCellType(), elem.GetPointIds())
+
+        # Attach datasets
+        if datasets is not None:
+            if volume_normalization:
+                for name, data in datasets.items():
+                    if not np.issubdtype(data.dtype, np.integer):
+                        data /= self.volumes
+            for name, data in datasets.items():
+                arr = vtkCommonCore.vtkDoubleArray()
+                arr.SetName(name)
+                arr.SetNumberOfTuples(data.size)
+                for i in range(data.size):
+                    arr.SetTuple1(i, data.flat[i])
+                grid.GetCellData().AddArray(arr)
+
+        # Wrap with PyVista and plot
+        mesh = pv.wrap(grid)
+
+        if scalar is None and datasets:
+            scalar = next(iter(datasets))
+
+        plotter = pv.Plotter()
+        plotter.add_mesh(mesh, scalars=scalar, **kwargs)
+
+        return plotter.show()
+    
     def write_data_to_vtk(
         self,
         filename: PathLike | None = None,
