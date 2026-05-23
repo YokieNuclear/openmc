@@ -661,12 +661,14 @@ class StructuredMesh(MeshBase):
         return self.n_elements
 
     def plot(self,
-            datasets: dict | None = None,
-            scalar: str | None = None,
-            volume_normalization: bool = True,
-            threshold: float | None = None,
-            cmap: str = 'turbo',
-            **kwargs):
+             datasets: dict | None = None,
+             scalar: str | None = None,
+             volume_normalization: bool = True,
+             threshold: float | None = None,
+             cmap: str = 'turbo',
+             title: str | None = None,
+             scalar_bar_title: str | None = None,
+             **kwargs):
             """Visualize the mesh using PyVista.
 
             Parameters
@@ -685,6 +687,10 @@ class StructuredMesh(MeshBase):
                 will be hidden. Useful for visualizing sparse data.
             cmap : str, optional
                 Colormap to use. Defaults to 'turbo'.
+            title : str, optional
+                Title displayed on the plot.
+            scalar_bar_title : str, optional
+                Label for the colorbar. Defaults to the dataset name.
             **kwargs
                 Additional keyword arguments passed to PyVista's ``add_mesh``
                 method.
@@ -735,7 +741,11 @@ class StructuredMesh(MeshBase):
 
             # Plot
             plotter = pv.Plotter()
-            plotter.add_mesh(mesh, scalars=scalar, cmap=cmap, **kwargs)
+            scalar_bar_args = {'title': scalar_bar_title if scalar_bar_title else scalar}
+            plotter.add_mesh(mesh, scalars=scalar, cmap=cmap,
+                            scalar_bar_args=scalar_bar_args, **kwargs)
+            if title is not None:
+                plotter.add_title(title)
 
             return plotter.show()
         
