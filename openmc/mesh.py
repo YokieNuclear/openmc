@@ -660,6 +660,73 @@ class StructuredMesh(MeshBase):
         )
         return self.n_elements
 
+    def plot(self,
+                datasets: dict | None = None,
+                scalar: str | None = None,
+                volume_normalization: bool = True,
+                curvilinear: bool = False,
+                **kwargs):
+            """Visualize the mesh using PyVista.
+
+            Parameters
+            ----------
+            datasets : dict, optional
+                Dictionary whose keys are data labels and values are datasets,
+                in the same format as :meth:`write_data_to_vtk`.
+            scalar : str, optional
+                Name of the dataset to display. If not provided, the first
+                dataset is used.
+            volume_normalization : bool, optional
+                Whether or not to normalize the data by the volume of the mesh
+                elements. Default is True.
+            curvilinear : bool, optional
+                Whether to use curvilinear elements. Only applies to
+                ``SphericalMesh`` and ``CylindricalMesh``. Default is False.
+            **kwargs
+                Additional keyword arguments passed to PyVista's ``add_mesh``
+                method.
+
+            Returns
+            -------
+            pyvista.plotting.renderers.Renderer
+                The trame viewer object returned by plotter.show().
+            """
+            import pyvista as pv
+            from vtk.util import numpy_support as nps
+            import vtk
+
+            # Build the VTK grid
+            if not curvilinear or isinstance(self, (RegularMesh, RectilinearMesh)):
+                vtk_grid = self._create_vtk_structured_grid()
+            else:
+                vtk_grid = self._create_vtk_unstructured_grid()
+
+            # Attach datasets to the grid
+            if datasets is not None:
+                for label, dataset in datasets.items():
+                    dataset = self._reshape_vtk_dataset(dataset)
+                    self._check_vtk_dataset(label, dataset)
+                    if dataset.ndim == 3:
+                        dataset = dataset.T.ravel()
+                    if volume_normalization:
+                        dataset = dataset / self.volumes.T.ravel()
+                    dataset_array = vtk.vtkDoubleArray()
+                    dataset_array.SetName(label)
+                    dataset_array.SetArray(nps.numpy_to_vtk(dataset), dataset.size, True)
+                    vtk_grid.GetCellData().AddArray(dataset_array)
+
+            # Wrap with PyVista
+            mesh = pv.wrap(vtk_grid)
+
+            # Determine which scalar to display
+            if scalar is None and datasets:
+                scalar = next(iter(datasets))
+
+            # Plot
+            plotter = pv.Plotter()
+            plotter.add_mesh(mesh, scalars=scalar, **kwargs)
+            return plotter.show()
+        
     def write_data_to_vtk(self,
                           filename: PathLike,
                           datasets: dict | None = None,
